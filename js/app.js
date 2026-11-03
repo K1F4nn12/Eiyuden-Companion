@@ -780,24 +780,64 @@ function renderFishing(backFn){
   pushNav(backFn || renderMinigames);
   const list = (typeof FISHING !== 'undefined') ? FISHING : [];
   const stars = r => '★'.repeat(r) + '☆'.repeat(5 - r);
+  // Group fish by location (like website's "By Spot" view)
+  const spotOrder = ["Grum County - North","Eltisweiss","Altverden Village","Kyshiri Village","Near Headquarters","Hishahn Palace","Hishahn","Skriss Village","Athrabalt","Yarnaan","Euchrisse","Dabavin","Seaside Cavern","Impershi'arc","Little Sandfish Island","Big Sandfish Island","Headquarters 1","Headquarters 2","Headquarters 3","Headquarters 4","Headquarters 5"];
+  const bySpot = spotOrder.map(spot => ({
+    spot,
+    fish: list.map((f,i)=>({f,i})).filter(({f}) => (f.loc||[]).includes(spot))
+  })).filter(g => g.fish.length > 0);
   view.innerHTML = `
   <div class="card">
     <button class="btn ghost" onclick="goBack()">← ${L('Mancing','Fishing')}</button>
   </div>
   <div class="card">
-    <h2>🎣 ${L('Daftar Ikan','Fish List')} (${list.length})</h2>
-    <p class="small">${L('Ketuk ikan untuk detail lokasi, rarity, dan catch rate.','Tap a fish for locations, rarity, and catch rates.')}</p>
+    <h2>🎣 ${L('Daftar Ikan per Lokasi','Fish List by Location')} (${list.length})</h2>
+    <p class="small">${L('Ketuk ikan untuk detail rarity dan catch rate.','Tap a fish for rarity and catch rate details.')}</p>
+    <input type="text" id="fish-search" placeholder="🔍 ${L('Cari ikan...','Search fish...')}" oninput="fishFilter()" style="width:100%;padding:8px 12px;margin:8px 0;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--txt);font-size:14px">
+    <select id="fish-spot" onchange="fishFilter()" style="width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--txt);font-size:14px">
+      <option value="">📍 ${L('Semua Lokasi','All Locations')}</option>
+      ${spotOrder.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+    </select>
   </div>
-  <div class="hero-grid">` +
-    list.map((f,i)=>`
-    <div class="hero-card" onclick="showFishDetail(${i}, ()=>renderFishing())">
-      <img src="${esc(f.icon_local||'img/fish/placeholder.png')}" alt="${esc(f.name)}" loading="lazy" onerror="this.src='img/fish/placeholder.png'">
-      <div class="hero-info">
-        <div class="hero-name">${esc(f.name)}</div>
-        <div class="hero-recruit">${stars(f.rarity||1)}</div>
-      </div>
-    </div>`).join('') + `</div>`;
+  <div id="fish-list">` +
+  bySpot.map(g => `
+  <div class="card fish-spot-group" data-spot="${esc(g.spot)}">
+    <h2>📍 ${esc(g.spot)} (<span class="spot-count">${g.fish.length}</span>)</h2>
+    <div class="hero-grid">` +
+      g.fish.map(({f,i})=>`
+      <div class="hero-card fish-card" data-name="${esc(f.name.toLowerCase())}" onclick="showFishDetail(${i}, ()=>renderFishing())">
+        <img src="${esc(f.icon_local||'img/fish/placeholder.png')}" alt="${esc(f.name)}" loading="lazy" onerror="this.src='img/fish/placeholder.png'">
+        <div class="hero-info">
+          <div class="hero-name">${esc(f.name)}</div>
+          <div class="hero-recruit">${stars(f.rarity||1)}</div>
+        </div>
+      </div>`).join('') + `</div>
+  </div>`).join('') + `</div>`;
   window.scrollTo(0,0);
+}
+function fishFilter(){
+  const q = (document.getElementById('fish-search').value||'').toLowerCase();
+  const spot = document.getElementById('fish-spot').value;
+  document.querySelectorAll('.fish-spot-group').forEach(group => {
+    const groupSpot = group.getAttribute('data-spot');
+    // Hide group if spot filter doesn't match
+    if(spot && groupSpot !== spot){
+      group.style.display = 'none';
+      return;
+    }
+    group.style.display = '';
+    // Filter cards by search query
+    let visible = 0;
+    group.querySelectorAll('.fish-card').forEach(card => {
+      const name = card.getAttribute('data-name');
+      const show = !q || name.includes(q);
+      card.style.display = show ? '' : 'none';
+      if(show) visible++;
+    });
+    // Update count and hide empty groups
+    group.querySelector('.spot-count').textContent = visible;
+    if(q && visible === 0) group.style.display = 'none';
+  });
 }
 function showFishDetail(i, backFn, fromBack){
   const t = T();
