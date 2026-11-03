@@ -474,7 +474,11 @@ function showHeroDetail(star, backFn, fromBack){
     <button class="btn ghost" onclick="goBack()">← ${t.tab_heroes}</button>
   </div>
   <div class="card center">
-    ${(h.portrait ? `<img src="${h.portrait}" alt="${esc(h.name)}" class="detail-artwork" style="cursor:zoom-in" onclick="openLightbox('${esc(h.portrait)}')" onerror="this.style.display='none';this.nextElementSibling.style.display=''">` : '')}
+    ${h.portrait_alt ? `<div class="mini-tabs">
+      <button class="mini-tab active" onclick="heroPortraitTab(0,this,'${esc(h.portrait)}','${esc(h.portrait_alt)}','${esc(h.name)}')">Hundred Heroes</button>
+      <button class="mini-tab" onclick="heroPortraitTab(1,this,'${esc(h.portrait)}','${esc(h.portrait_alt)}','${esc(h.name)}')">Rising</button>
+    </div>` : ''}
+    ${(h.portrait ? `<img src="${h.portrait}" alt="${esc(h.name)}" class="detail-artwork" id="hero-portrait-img" style="cursor:zoom-in" onclick="openLightbox(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display=''">` : '')}
     <img src="${h.img}" alt="${esc(h.name)}" class="detail-icon"${h.portrait ? ` style="display:none"` : ''} onerror="this.src='img/heroes/placeholder.png'">
     <h2><span class="star">#${h.star}</span> ${esc(h.name)}</h2>
     ${miss}
@@ -674,6 +678,15 @@ function enemyArtTab(idx, btn){
   btn.parentElement.querySelectorAll('.mini-tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
+function heroPortraitTab(idx, btn, portraitHH, portraitRising, name){
+  const img = document.getElementById('hero-portrait-img');
+  if(img){
+    img.src = idx===0 ? portraitHH : portraitRising;
+    img.alt = name;
+  }
+  btn.parentElement.querySelectorAll('.mini-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
 
 /* ---------- BEIGOMA (Task 4) ---------- */
 function renderBeigoma(backFn){
@@ -761,6 +774,68 @@ function showBeigomaDetail(i, backFn, fromBack){
   ${skillHtml}`;
   window.scrollTo(0,0);
 }
+/* ---------- FISHING ---------- */
+function renderFishing(backFn){
+  const t = T();
+  pushNav(backFn || renderMinigames);
+  const list = (typeof FISHING !== 'undefined') ? FISHING : [];
+  const stars = r => '★'.repeat(r) + '☆'.repeat(5 - r);
+  view.innerHTML = `
+  <div class="card">
+    <button class="btn ghost" onclick="goBack()">← ${L('Mancing','Fishing')}</button>
+  </div>
+  <div class="card">
+    <h2>🎣 ${L('Daftar Ikan','Fish List')} (${list.length})</h2>
+    <p class="small">${L('Ketuk ikan untuk detail lokasi, rarity, dan catch rate.','Tap a fish for locations, rarity, and catch rates.')}</p>
+  </div>
+  <div class="hero-grid">` +
+    list.map((f,i)=>`
+    <div class="hero-card" onclick="showFishDetail(${i}, ()=>renderFishing())">
+      <img src="${esc(f.icon_local||'img/fish/placeholder.png')}" alt="${esc(f.name)}" loading="lazy" onerror="this.src='img/fish/placeholder.png'">
+      <div class="hero-info">
+        <div class="hero-name">${esc(f.name)}</div>
+        <div class="hero-recruit">${stars(f.rarity||1)}</div>
+      </div>
+    </div>`).join('') + `</div>`;
+  window.scrollTo(0,0);
+}
+function showFishDetail(i, backFn, fromBack){
+  const t = T();
+  const f = (typeof FISHING !== 'undefined') ? FISHING[i] : null;
+  if(!f) return;
+  if(!fromBack) pushNav(backFn || (()=>renderFishing()));
+  const stars = r => '★'.repeat(r) + '☆'.repeat(5 - r);
+  const rarityNames = {1:'Common',2:'Uncommon',3:'Rare',4:'Epic',5:'Legendary'};
+  // Info table
+  const infoRows = [
+    [L('Rarity','Rarity'), `${stars(f.rarity||1)} ${rarityNames[f.rarity]||''}`],
+    [L('Lokasi','Locations'), (f.loc||[]).join(', ')],
+  ];
+  if(f.returns) infoRows.push([L('Hasil','Returns'), esc(f.returns)]);
+  const infoHtml = `<div class="card"><h2>ℹ️ ${L('Info','Info')}</h2><table class="wiki-table">` +
+    infoRows.map(([k,v])=>`<tr><th>${k}</th><td>${v}</td></tr>`).join('') + `</table></div>`;
+  // Catch rates table
+  let rateHtml = '';
+  if(f.rates && f.rates.length){
+    rateHtml = `<div class="card"><h2>🎣 ${L('Catch Rate per Spot','Catch Rates by Spot')}</h2><div class="table-wrap"><table class="wiki-table compact">
+      <tr><th>${L('Spot','Spot')}</th><th>Bamboo<br><span class="small">Rate/Hook</span></th><th>Quality<br><span class="small">Rate/Hook</span></th><th>Hero's<br><span class="small">Rate/Hook</span></th></tr>` +
+      f.rates.map(r=>`<tr><td>${esc(r.spot)}</td><td>${r.b[0]}%<br><span class="small">${r.b[1]}s</span></td><td>${r.q[0]}%<br><span class="small">${r.q[1]}s</span></td><td>${r.h[0]}%<br><span class="small">${r.h[1]}s</span></td></tr>`).join('') +
+      `</table></div></div>`;
+  }
+  view.innerHTML = `
+  <div class="card">
+    <button class="btn ghost" onclick="goBack()">← ${L('Mancing','Fishing')}</button>
+  </div>
+  <div class="card center">
+    <img src="${esc(f.icon_local||'img/fish/placeholder.png')}" alt="${esc(f.name)}" class="detail-icon" style="width:120px;height:120px;cursor:zoom-in" onclick="openLightbox('${esc(f.icon_local||'img/fish/placeholder.png')}')" onerror="this.src='img/fish/placeholder.png'">
+    <h2>🎣 ${esc(f.name)}</h2>
+    <p>${stars(f.rarity||1)} ${rarityNames[f.rarity]||''}</p>
+  </div>
+  ${f.desc ? `<div class="card"><h2>📝 ${L('Deskripsi','Description')}</h2><p>${esc(f.desc)}</p></div>` : ''}
+  ${infoHtml}
+  ${rateHtml}`;
+  window.scrollTo(0,0);
+}
 function renderMinigames(){
   const t = T();
   view.innerHTML = `<div class="card"><h2>🃏 ${t.tab_minigames}</h2>
@@ -806,6 +881,11 @@ function showMinigameDetail(i){
   if(m.slug === 'beigoma'){
     beigomaBtn = `<div class="card center"><button class="btn" onclick="renderBeigoma(()=>showMinigameDetail(${i}))">🌀 ${L('Lihat Semua Beigoma','View All Beigoma')}</button></div>`;
   }
+  // Special: fishing minigame gets a button to the fish database
+  let fishingBtn = '';
+  if(m.slug === 'fishing'){
+    fishingBtn = `<div class="card center"><button class="btn" onclick="renderFishing(()=>showMinigameDetail(${i}))">🎣 ${L('Lihat Semua Ikan','View All Fish')}</button></div>`;
+  }
   view.innerHTML = `
   <div class="card">
     <button class="btn ghost" onclick="goBack()">← ${t.tab_minigames}</button>
@@ -815,7 +895,7 @@ function showMinigameDetail(i){
     <p>${esc(L(m.summary_id, m.summary_en))}</p>
     ${secHtml}
   </div>
-  ${beigomaBtn}`;
+  ${beigomaBtn}${fishingBtn}`;
   window.scrollTo(0,0);
 }
 
@@ -882,26 +962,25 @@ function showFacilityDetail(i){
 function renderMisc(){
   const t = T();
   let html = `<div class="card"><h2>📦 ${t.tab_misc}</h2>
-    <p class="small">${L('Panduan umum dan referensi data game. Ketuk grup untuk mekar/tutup.','General guides and game data reference. Tap a group to expand/collapse.')}</p></div>`;
+    <p class="small">${L('Panduan umum dan referensi data game.','General guides and game data reference.')}</p></div>`;
 
-  html += `<div class="card acc-head" data-acc="acc-guides" onclick="accToggle('acc-guides')">
-    <h2>📖 ${L('Panduan','Guides')} (${GUIDES.length}) <span class="acc-arrow">›</span></h2></div>
-    <div class="acc-body" id="acc-guides"><div class="item-list">` +
+  html += `<div class="card"><h2>📖 ${L('Panduan','Guides')} (${GUIDES.length})</h2>
+    <div class="item-list">` +
     GUIDES.map((m,i)=>`
     <div class="item-row" onclick="showGuideDetail(${i})">
       <span class="item-name">${esc(L(m.name_id, m.name_en))}</span>
       <span class="item-arrow">›</span>
     </div>`).join('') + `</div></div>`;
 
-  html += `<div class="card acc-head" data-acc="acc-gamedata" onclick="accToggle('acc-gamedata')">
-    <h2>💾 ${L('Data Game','Game Data')} (${GAMEDATA.length}) <span class="acc-arrow">›</span></h2></div>
-    <div class="acc-body" id="acc-gamedata"><div class="item-list">` +
+  html += `<div class="card"><h2>💾 ${L('Data Game','Game Data')} (${GAMEDATA.length})</h2>
+    <div class="item-list">` +
     GAMEDATA.map((cat,i)=>`
     <div class="item-row" onclick="showGamedataDetail(${i})">
       <span class="item-name">${esc(L(cat.category_id, cat.category_en))} (${cat.entries.length})</span>
       <span class="item-arrow">›</span>
     </div>`).join('') + `</div></div>`;
   view.innerHTML = html;
+  window.scrollTo(0,0);
 }
 function showGuideDetail(i){
   const t = T();
