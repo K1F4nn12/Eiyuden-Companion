@@ -72,7 +72,6 @@ document.querySelectorAll('.tabbar button').forEach(b=>{
     document.querySelectorAll('.tabbar button').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
     navStack = [];
-    if(typeof stopCarousel==='function') stopCarousel();
     render(b.dataset.tab);
   });
 });
@@ -220,30 +219,12 @@ function renderHome(){
     <p class="mt"><span class="badge warn">MISSABLE</span> <b>Leene</b> — ${L('butuh 119 hero lain sebelum mengalahkan Dux Aldric.','requires the other 119 heroes before defeating Dux Aldric.')}</p>
     <p class="mt"><span class="badge ok">${L('TITIK AMAN','SAFE POINT')}</span> ${L('Setelah <b>Yulin</b> bergabung, rekrut semua yang tersisa sebelum lanjut cerita.','After <b>Yulin</b> joins, recruit everyone remaining before advancing the story.')}</p>
   </div>
-  <div class="card" style="padding:0;overflow:hidden">
-    <div id="homeCarousel" style="position:relative">
-      <img id="carouselImg" src="img/bg/bg-elektra.png" alt="Showcase" style="width:100%;height:220px;object-fit:cover;object-position:top;display:block">
-      <div style="position:absolute;bottom:8px;left:0;right:0;text-align:center">
-        <span class="cdot active" data-i="0"></span><span class="cdot" data-i="1"></span><span class="cdot" data-i="2"></span><span class="cdot" data-i="3"></span>
-      </div>
-    </div>
+  <div class="card center">
+    <h2>🗺️ ${L('Interactive World Map','Interactive World Map')}</h2>
+    <p class="small">${L('Jelajahi peta Allraan — 47 lokasi (Settlement & Dungeon). Ketuk marker untuk detail.','Explore the map of Allraan — 47 locations (Settlements & Dungeons). Tap markers for details.')}</p>
+    <button class="btn" onclick="renderWorldMap(()=>renderHome())">🗺️ ${L('Buka Peta','Open Map')}</button>
   </div>`;
-  startCarousel();
 }
-
-/* ---------- HOME CAROUSEL ---------- */
-const CAROUSEL_IMGS = ['img/bg/bg-elektra.png','img/bg/bg-francesca.png','img/bg/bg-hildi.png','img/bg/bg-lilwn.png'];
-let carouselIdx = 0, carouselTimer = null;
-function startCarousel(){
-  stopCarousel();
-  carouselTimer = setInterval(()=>{
-    carouselIdx = (carouselIdx + 1) % CAROUSEL_IMGS.length;
-    const img = document.getElementById('carouselImg');
-    if(img) img.src = CAROUSEL_IMGS[carouselIdx];
-    document.querySelectorAll('.cdot').forEach((d,i)=>d.classList.toggle('active', i===carouselIdx));
-  }, 4000);
-}
-function stopCarousel(){ if(carouselTimer){ clearInterval(carouselTimer); carouselTimer = null; } }
 
 /* ---------- WALKTHROUGH ---------- */
 function renderWalk(){
@@ -406,9 +387,13 @@ function showHeroDetail(star, backFn, fromBack){
     const parts = gp.recruitment.split(' | ');
     const loc = parts.length > 1 ? parts[1] : '';
     const det = parts.length > 2 ? parts.slice(2).join(' | ') : gp.recruitment;
+    // Make location clickable if it matches a known location
+    let locCell = esc(loc);
+    const li = findLocationIndex(loc);
+    if(li>=0) locCell = `<a href="javascript:void(0)" onclick="showLocationDetail(${li},()=>showHeroDetail(${star}))" style="color:var(--link)">${esc(loc)}</a>`;
     recHtml = `<div class="card"><h2>🤝 ${t.how_to_recruit}</h2>
       <table class="wiki-table">
-        <tr><th>${L('Lokasi','Location')}</th><td>${esc(loc)}</td></tr>
+        <tr><th>${L('Lokasi','Location')}</th><td>${locCell}</td></tr>
         <tr><th>${L('Detail','Details')}</th><td>${esc(det)}</td></tr>
       </table></div>`;
   }
@@ -637,7 +622,10 @@ function showEnemyDetail(li, ei, backFn, fromBack){
   let locHtml = '';
   if(e.locations && e.locations.length){
     locHtml = `<div class="card"><h2>📍 ${L('Lokasi','Locations')}</h2><ul class="ticks">` +
-      e.locations.map(l=>`<li>${esc(l)}</li>`).join('') + `</ul></div>`;
+      e.locations.map(l=>{
+        const li = findLocationIndex(l);
+        return li>=0 ? `<li><a href="javascript:void(0)" onclick="showLocationDetail(${li},()=>showEnemyDetail(${ENEMIES.indexOf(e)}))" style="color:var(--link)">${esc(l)}</a></li>` : `<li>${esc(l)}</li>`;
+      }).join('') + `</ul></div>`;
   }
   let weakHtml = '';
   if(e.weaknesses && Object.keys(e.weaknesses).length){
@@ -847,9 +835,13 @@ function showFishDetail(i, backFn, fromBack){
   const stars = r => '★'.repeat(r) + '☆'.repeat(5 - r);
   const rarityNames = {1:'Common',2:'Uncommon',3:'Rare',4:'Epic',5:'Legendary'};
   // Info table
+  const locLinks = (f.loc||[]).map(l=>{
+    const li = findLocationIndex(l);
+    return li>=0 ? `<a href="javascript:void(0)" onclick="showLocationDetail(${li},()=>showFishDetail(${i}))" style="color:var(--link)">${esc(l)}</a>` : esc(l);
+  }).join(', ');
   const infoRows = [
     [L('Rarity','Rarity'), `${stars(f.rarity||1)} ${rarityNames[f.rarity]||''}`],
-    [L('Lokasi','Locations'), (f.loc||[]).join(', ')],
+    [L('Lokasi','Locations'), locLinks],
   ];
   if(f.returns) infoRows.push([L('Hasil','Returns'), esc(f.returns)]);
   const infoHtml = `<div class="card"><h2>ℹ️ ${L('Info','Info')}</h2><table class="wiki-table">` +
@@ -926,6 +918,11 @@ function showMinigameDetail(i){
   if(m.slug === 'fishing'){
     fishingBtn = `<div class="card center"><button class="btn" onclick="renderFishing(()=>showMinigameDetail(${i}))">🎣 ${L('Lihat Semua Ikan','View All Fish')}</button></div>`;
   }
+  // Special: trading minigame gets a button to the trading post
+  let tradingBtn = '';
+  if(m.slug === 'trading'){
+    tradingBtn = `<div class="card center"><button class="btn" onclick="renderTrading(()=>showMinigameDetail(${i}))">💰 ${L('Buka Trading Post','Open Trading Post')}</button></div>`;
+  }
   view.innerHTML = `
   <div class="card">
     <button class="btn ghost" onclick="goBack()">← ${t.tab_minigames}</button>
@@ -935,7 +932,7 @@ function showMinigameDetail(i){
     <p>${esc(L(m.summary_id, m.summary_en))}</p>
     ${secHtml}
   </div>
-  ${beigomaBtn}${fishingBtn}`;
+  ${beigomaBtn}${fishingBtn}${tradingBtn}`;
   window.scrollTo(0,0);
 }
 
@@ -996,6 +993,211 @@ function showFacilityDetail(i){
     ${secHtml}
   </div>`;
   window.scrollTo(0,0);
+}
+
+/* ---------- TRADING POST ---------- */
+function renderTrading(backFn){
+  const t = T();
+  pushNav(backFn || renderMinigames);
+  const tr = (typeof TRADING !== 'undefined') ? TRADING : null;
+  if(!tr){ view.innerHTML = '<div class="card"><p>Data trading belum tersedia.</p></div>'; return; }
+  const cats = Object.keys(tr.database);
+  view.innerHTML = `
+  <div class="card">
+    <button class="btn ghost" onclick="goBack()">← ${L('Trading Post','Trading Post')}</button>
+  </div>
+  <div class="card">
+    <h2>💰 ${L('Rute Trading Optimal','Optimal Trading Route')}</h2>
+    <p class="small">${L('Werne → Treefolk → Hishahn → Impershi&#39;arc → Ardinale → Twinhorne West. Jual dulu barang bawaan, lalu isi ulang sebelum pindah kota.','Werne → Treefolk → Hishahn → Impershi&#39;arc → Ardinale → Twinhorne West. Sell carry-over stock first, then restock before moving on.')}</p>
+    ${tr.route.map(s=>`
+    <div class="mt">
+      <h3>${s.stop}. ${esc(s.town)}</h3>
+      <p><b class="ok">🛒 Buy:</b> ${s.buy_here.map(esc).join(', ')}</p>
+      <p><b class="warn">💰 Sell:</b> ${s.sell_here.map(esc).join(', ')}</p>
+    </div>`).join('')}
+    <p class="small mt">💡 ${esc(tr.route_notes.profit)}</p>
+  </div>
+  <div class="card">
+    <h2>💡 ${L('Tips & Strategi','Tips & Strategy')}</h2>
+    ${tr.tips.map(tip=>`<h3 class="mt">${esc(tip.title)}</h3><p class="small">${esc(tip.text)}</p>`).join('')}
+  </div>
+  <div class="card">
+    <h2>📦 ${L('Database Item Trading','Trade Item Database')} (27)</h2>
+    <p class="small">${L('Harga beli & jual terbaik per item. Profit = margin maksimum per unit.','Best buy & sell locations per item. Profit = maximum margin per unit.')}</p>
+    ${cats.map(cat=>`
+    <h3 class="mt">${esc(cat)} (${tr.database[cat].length})</h3>
+    <div style="overflow-x:auto"><table class="wiki-table">
+      <tr><th>${L('Item','Item')}</th><th>Stack</th><th>${L('Beli Terbaik','Best Buy')}</th><th>${L('Harga','Price')}</th><th>${L('Jual Terbaik','Best Sell')}</th><th>${L('Harga','Price')}</th><th>Profit</th></tr>
+      ${tr.database[cat].map(it=>`
+      <tr>
+        <td><b>${esc(it.name)}</b>${it.badge?`<br><span class="badge warn">${esc(it.badge)}</span>`:''}</td>
+        <td class="center">${it.stack}</td>
+        <td>${esc(it.best_buy)}</td><td class="ok"><b>${it.buy_price.toLocaleString()}</b></td>
+        <td>${esc(it.best_sell)}</td><td class="warn"><b>${it.sell_price.toLocaleString()}</b></td>
+        <td class="warn"><b>+${it.profit.toLocaleString()}</b></td>
+      </tr>`).join('')}
+    </table></div>`).join('')}
+  </div>
+  <div class="card">
+    <h2>📊 ${L('Tabel Harga Lengkap','Complete Price Tables')}</h2>
+    <p class="small">${L('<b class="ok">Hijau</b> = bisa dibeli (harga beli). <b>Abu</b> = harga jual saja. <b class="warn">Kuning</b> = harga jual terbaik. Geser ke samping di layar kecil.','<b class="ok">Green</b> = can purchase (buy price). <b>Grey</b> = sell-only price. <b class="warn">Highlighted</b> = best sell price. Scroll horizontally on small screens.')}</p>
+    <div class="center mt" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center">
+      ${cats.map((cat,ci)=>`<button class="btn ${ci===0?'':'ghost'} mini-tab trade-tab" onclick="tradeTab(${ci},this)">${esc(cat)}</button>`).join('')}
+    </div>
+    <div id="trade-price-wrap" class="mt"></div>
+  </div>`;
+  tradeTab(0, document.querySelector('.trade-tab'));
+  window.scrollTo(0,0);
+}
+function tradeTab(ci, btn){
+  const tr = (typeof TRADING !== 'undefined') ? TRADING : null;
+  if(!tr) return;
+  const cats = Object.keys(tr.database);
+  const cat = cats[ci];
+  const locs = tr.price_locations;
+  const tbl = tr.price_tables[cat];
+  document.querySelectorAll('.trade-tab').forEach(b=>b.classList.remove('active'));
+  if(btn){ btn.classList.add('active'); }
+  const wrap = document.getElementById('trade-price-wrap');
+  if(!wrap) return;
+  wrap.innerHTML = `
+  <h3>${esc(cat)}</h3>
+  <div style="overflow-x:auto"><table class="wiki-table">
+    <tr><th>${L('Item','Item')}</th>${locs.map(l=>`<th>${esc(l)}</th>`).join('')}</tr>
+    ${Object.keys(tbl).map(item=>{
+      const row = tbl[item];
+      return `<tr><td><b>${esc(item)}</b></td>` + locs.map(l=>{
+        const cell = row[l];
+        if(!cell) return '<td>-</td>';
+        const cls = cell.best ? 'warn' : (cell.buy ? 'ok' : 'muted');
+        const txt = cell.p.toLocaleString() + (cell.range ? ` <span class="small">(${esc(cell.range)})</span>` : '');
+        return `<td class="${cls}"${cell.best?' style="background:rgba(255,180,0,.15)"':''}>${txt}</td>`;
+      }).join('') + `</tr>`;
+    }).join('')}
+  </table></div>`;
+}
+
+/* ---------- INTERACTIVE WORLD MAP ---------- */
+let worldMap = null, worldMapMarkers = [];
+function renderWorldMap(backFn){
+  const t = T();
+  pushNav(backFn || renderHome);
+  const list = (typeof LOCATIONS !== 'undefined') ? LOCATIONS : [];
+  view.innerHTML = `
+  <div class="card">
+    <button class="btn ghost" onclick="goBack()">← ${L('Peta Dunia','World Map')}</button>
+  </div>
+  <div class="card">
+    <h2>🗺️ ${L('Interactive World Map','Interactive World Map')}</h2>
+    <p class="small">${L('Ketuk marker untuk info lokasi. Klik nama lokasi untuk halaman detail.','Tap a marker for location info. Click the location name for the detail page.')}</p>
+    <input type="text" id="map-search" placeholder="🔍 ${L('Cari lokasi...','Search locations...')}" oninput="mapFilter()" style="width:100%;padding:8px 12px;margin:8px 0;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--txt);font-size:14px">
+    <div class="center" style="display:flex;gap:6px;justify-content:center;margin-bottom:8px">
+      <button class="btn ghost mini-tab map-filter active" onclick="mapCatFilter('all',this)">${L('Semua','All')}</button>
+      <button class="btn ghost mini-tab map-filter" onclick="mapCatFilter('Settlement',this)">🏘️ Settlement</button>
+      <button class="btn ghost mini-tab map-filter" onclick="mapCatFilter('Dungeon',this)">⚔️ Dungeon</button>
+    </div>
+    <div id="worldmap" style="height:420px;border-radius:12px;overflow:hidden;border:1px solid var(--line)"></div>
+  </div>`;
+  // Init Leaflet map
+  setTimeout(()=>{
+    const mapEl = document.getElementById('worldmap');
+    if(!mapEl || typeof L === 'undefined') return;
+    if(worldMap){ worldMap.remove(); worldMap = null; }
+    worldMapMarkers = [];
+    // Use simple CRS for image overlay (2048x1440)
+    const w = 2048, h = 1440;
+    const bounds = [[0,0],[h,w]];
+    worldMap = L.map('worldmap', {crs: L.CRS.Simple, minZoom: -2, maxZoom: 2, zoomControl: true});
+    L.imageOverlay('img/allraan-world-map.jpg', bounds).addTo(worldMap);
+    worldMap.fitBounds(bounds);
+    // Add markers (y is flipped for Leaflet: lat = h - y)
+    list.forEach((loc,i)=>{
+      const lat = h - loc.y, lng = loc.x;
+      const icon = L.divIcon({
+        className: 'map-marker-' + loc.category.toLowerCase(),
+        html: `<div style="background:${loc.category==='Settlement'?'#f5b800':'#e04040'};color:#000;font-weight:bold;font-size:11px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:pointer">${loc.category==='Settlement'?'🏘':'⚔'}</div>`,
+        iconSize: [26,26], iconAnchor: [13,13]
+      });
+      const m = L.marker([lat,lng], {icon, title: loc.name}).addTo(worldMap);
+      m.bindPopup(`<b><a href="javascript:void(0)" onclick="showLocationDetail(${i},()=>renderWorldMap())" style="color:var(--link)">${esc(loc.name)}</a></b><br><span class="small">${esc(loc.category)}</span>`);
+      m._locIdx = i; m._locCat = loc.category; m._locName = loc.name.toLowerCase();
+      worldMapMarkers.push(m);
+    });
+  }, 100);
+  window.scrollTo(0,0);
+}
+function mapFilter(){
+  const q = (document.getElementById('map-search').value||'').toLowerCase();
+  worldMapMarkers.forEach(m=>{
+    const show = !q || m._locName.includes(q);
+    if(show){ if(!worldMap.hasLayer(m)) m.addTo(worldMap); }
+    else { if(worldMap.hasLayer(m)) worldMap.removeLayer(m); }
+  });
+}
+function mapCatFilter(cat, btn){
+  document.querySelectorAll('.map-filter').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const q = (document.getElementById('map-search')?.value||'').toLowerCase();
+  worldMapMarkers.forEach(m=>{
+    const catOk = cat==='all' || m._locCat===cat;
+    const qOk = !q || m._locName.includes(q);
+    const show = catOk && qOk;
+    if(show){ if(!worldMap.hasLayer(m)) m.addTo(worldMap); }
+    else { if(worldMap.hasLayer(m)) worldMap.removeLayer(m); }
+  });
+}
+function showLocationDetail(i, backFn, fromBack){
+  const t = T();
+  const loc = (typeof LOCATIONS !== 'undefined') ? LOCATIONS[i] : null;
+  if(!loc) return;
+  if(!fromBack) pushNav(backFn || (()=>renderWorldMap()));
+  // Find enemies for clickable links (dungeons)
+  let enemiesHtml = '';
+  if(loc.enemies && loc.enemies.length){
+    enemiesHtml = `<h3 class="mt">👹 ${L('Monster','Monsters')}</h3><div style="display:flex;flex-wrap:wrap;gap:6px">` +
+      loc.enemies.map(en=>{
+        const ei = findEnemyIndex(en);
+        return ei>=0 ? `<button class="btn ghost" onclick="showEnemyDetail(${ei},()=>showLocationDetail(${i}))">${esc(en)}</button>` : `<span class="badge">${esc(en)}</span>`;
+      }).join('') + `</div>`;
+  }
+  // Location image (zoomable)
+  let imgHtml = '';
+  if(loc.img){
+    imgHtml = `<div class="center"><img src="${esc(loc.img)}" alt="${esc(loc.name)}" style="max-width:100%;border-radius:12px;cursor:zoom-in" onclick="openLightbox('${esc(loc.img)}')" loading="lazy"></div>`;
+  }
+  view.innerHTML = `
+  <div class="card">
+    <button class="btn ghost" onclick="goBack()">← ${esc(loc.category)}</button>
+  </div>
+  <div class="card">
+    <h2>${loc.category==='Settlement'?'🏘️':'⚔️'} ${esc(loc.name)}</h2>
+    <p><span class="badge">${esc(loc.category)}</span></p>
+    ${imgHtml}
+    ${loc.description?`<p class="mt">${esc(loc.description)}</p>`:''}
+    ${(loc.sections||[]).map(s=>`<h3 class="mt">${esc(s.heading)}</h3><p class="small">${esc(s.content)}</p>`).join('')}
+    ${enemiesHtml}
+  </div>`;
+  window.scrollTo(0,0);
+}
+// Find enemy index by name (fuzzy match)
+function findEnemyIndex(name){
+  if(typeof ENEMIES === 'undefined') return -1;
+  const n = name.toLowerCase().trim();
+  for(let i=0;i<ENEMIES.length;i++){
+    const en = (ENEMIES[i].name||'').toLowerCase().replace('/enemy','').trim();
+    if(en === n || en.includes(n) || n.includes(en)) return i;
+  }
+  return -1;
+}
+// Find location index by name (fuzzy match)
+function findLocationIndex(name){
+  if(typeof LOCATIONS === 'undefined') return -1;
+  const n = name.toLowerCase().trim();
+  for(let i=0;i<LOCATIONS.length;i++){
+    const ln = (LOCATIONS[i].name||'').toLowerCase().trim();
+    if(ln === n || ln.includes(n) || n.includes(ln)) return i;
+  }
+  return -1;
 }
 
 /* ---------- LAIN-LAIN (Guides + Game Data) ---------- */
